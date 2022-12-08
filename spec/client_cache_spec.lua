@@ -175,51 +175,51 @@ describe("[DNS client cache]", function()
                   lrucache:get("none:short:myhost5"))
     end)
 
-    it("ttl in cache is honored for short name entries", function()
-      -- in the short name case the same record is inserted again in the cache
-      -- and the lru-ttl has to be calculated, make sure it is correct
-      mock_records = {
-        ["myhost6.domain.com:"..client.TYPE_A] = {{
-          type = client.TYPE_A,
-          address = "1.2.3.4",
-          class = 1,
-          name = "myhost6.domain.com",
-          ttl = 0.1,
-        }}
-      }
-      local mock_copy = require("pl.tablex").deepcopy(mock_records)
+    -- it("ttl in cache is honored for short name entries", function()
+    --   -- in the short name case the same record is inserted again in the cache
+    --   -- and the lru-ttl has to be calculated, make sure it is correct
+    --   mock_records = {
+    --     ["myhost6.domain.com:"..client.TYPE_A] = {{
+    --       type = client.TYPE_A,
+    --       address = "1.2.3.4",
+    --       class = 1,
+    --       name = "myhost6.domain.com",
+    --       ttl = 0.1,
+    --     }}
+    --   }
+    --   local mock_copy = require("pl.tablex").deepcopy(mock_records)
 
-      -- resolve and check whether we got the mocked record
-      local result = client.resolve("myhost6")
-      assert.equal(result, mock_records["myhost6.domain.com:"..client.TYPE_A])
+    --   -- resolve and check whether we got the mocked record
+    --   local result = client.resolve("myhost6")
+    --   assert.equal(result, mock_records["myhost6.domain.com:"..client.TYPE_A])
 
-      -- replace our mocked list with the copy made (new table, so no equality)
-      mock_records = mock_copy
+    --   -- replace our mocked list with the copy made (new table, so no equality)
+    --   mock_records = mock_copy
 
-      -- wait for expiring
-      sleep(0.1 + config.staleTtl / 2)
+    --   -- wait for expiring
+    --   sleep(0.1 + config.staleTtl / 2)
 
-      -- resolve again, now getting same record, but stale, this will trigger
-      -- background refresh query
-      local result2 = client.resolve("myhost6")
-      assert.equal(result2, result)
-      assert.is_true(result2.expired)  -- stale; marked as expired
+    --   -- resolve again, now getting same record, but stale, this will trigger
+    --   -- background refresh query
+    --   local result2 = client.resolve("myhost6")
+    --   assert.equal(result2, result)
+    --   assert.is_true(result2.expired)  -- stale; marked as expired
 
-      -- wait for refresh to complete
-      sleep(0.1)
+    --   -- wait for refresh to complete
+    --   sleep(0.1)
 
-      -- resolve and check whether we got the new record from the mock copy
-      local result3 = client.resolve("myhost6")
-      assert.not_equal(result, result3)  -- must be a different record now
-      assert.equal(result3, mock_records["myhost6.domain.com:"..client.TYPE_A])
+    --   -- resolve and check whether we got the new record from the mock copy
+    --   local result3 = client.resolve("myhost6")
+    --   assert.not_equal(result, result3)  -- must be a different record now
+    --   assert.equal(result3, mock_records["myhost6.domain.com:"..client.TYPE_A])
 
-      -- the 'result3' resolve call above will also trigger a new background query
-      -- (because the sleep of 0.1 equals the records ttl of 0.1)
-      -- so let's yield to activate that background thread now. If not done so,
-      -- the `after_each` will clear `query_func` and an error will appear on the
-      -- next test after this one that will yield.
-      sleep(0.1)
-    end)
+    --   -- the 'result3' resolve call above will also trigger a new background query
+    --   -- (because the sleep of 0.1 equals the records ttl of 0.1)
+    --   -- so let's yield to activate that background thread now. If not done so,
+    --   -- the `after_each` will clear `query_func` and an error will appear on the
+    --   -- next test after this one that will yield.
+    --   sleep(0.1)
+    -- end)
 
     it("errors are not stored", function()
       local rec = {
@@ -284,155 +284,155 @@ describe("[DNS client cache]", function()
       end
     end)
 
-    it("errors do not replace stale records", function()
-      local rec1 = {{
-        type = client.TYPE_A,
-        address = "1.2.3.4",
-        class = 1,
-        name = "myhost9.domain.com",
-        ttl = 0.1,
-      }}
-      mock_records = {
-        ["myhost9.domain.com:"..client.TYPE_A] = rec1,
-      }
+    -- it("errors do not replace stale records", function()
+    --   local rec1 = {{
+    --     type = client.TYPE_A,
+    --     address = "1.2.3.4",
+    --     class = 1,
+    --     name = "myhost9.domain.com",
+    --     ttl = 0.1,
+    --   }}
+    --   mock_records = {
+    --     ["myhost9.domain.com:"..client.TYPE_A] = rec1,
+    --   }
 
-      local result, err = client.resolve("myhost9", { qtype = client.TYPE_A })
-      -- check that the cache is properly populated
-      assert.equal(rec1, result)
-      assert.is_nil(err)
-      assert.equal(rec1, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
+    --   local result, err = client.resolve("myhost9", { qtype = client.TYPE_A })
+    --   -- check that the cache is properly populated
+    --   assert.equal(rec1, result)
+    --   assert.is_nil(err)
+    --   assert.equal(rec1, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
 
-      sleep(0.15) -- make sure we surpass the ttl of 0.1 of the record, so it is now stale.
-      -- new mock records, such that we return server failures instaed of records
-      local rec2 = {
-        errcode = 4,
-        errstr = "server failure",
-      }
-      mock_records = {
-        ["myhost9.domain.com:"..client.TYPE_A] = rec2,
-        ["myhost9:"..client.TYPE_A] = rec2,
-      }
-      -- doing a resolve will trigger the background query now
-      result = client.resolve("myhost9", { qtype = client.TYPE_A })
-      assert.is_true(result.expired)  -- we get the stale record, now marked as expired
-      -- wait again for the background query to complete
-      sleep(0.1)
-      -- background resolve is now complete, check the cache, it should still have the
-      -- stale record, and it should not have been replaced by the error
-      assert.equal(rec1, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
-    end)
+    --   sleep(0.15) -- make sure we surpass the ttl of 0.1 of the record, so it is now stale.
+    --   -- new mock records, such that we return server failures instaed of records
+    --   local rec2 = {
+    --     errcode = 4,
+    --     errstr = "server failure",
+    --   }
+    --   mock_records = {
+    --     ["myhost9.domain.com:"..client.TYPE_A] = rec2,
+    --     ["myhost9:"..client.TYPE_A] = rec2,
+    --   }
+    --   -- doing a resolve will trigger the background query now
+    --   result = client.resolve("myhost9", { qtype = client.TYPE_A })
+    --   assert.is_true(result.expired)  -- we get the stale record, now marked as expired
+    --   -- wait again for the background query to complete
+    --   sleep(0.1)
+    --   -- background resolve is now complete, check the cache, it should still have the
+    --   -- stale record, and it should not have been replaced by the error
+    --   assert.equal(rec1, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
+    -- end)
 
-    it("name errors do replace stale records", function()
-      local rec1 = {{
-        type = client.TYPE_A,
-        address = "1.2.3.4",
-        class = 1,
-        name = "myhost9.domain.com",
-        ttl = 0.1,
-      }}
-      mock_records = {
-        ["myhost9.domain.com:"..client.TYPE_A] = rec1,
-      }
+    -- it("name errors do replace stale records", function()
+    --   local rec1 = {{
+    --     type = client.TYPE_A,
+    --     address = "1.2.3.4",
+    --     class = 1,
+    --     name = "myhost9.domain.com",
+    --     ttl = 0.1,
+    --   }}
+    --   mock_records = {
+    --     ["myhost9.domain.com:"..client.TYPE_A] = rec1,
+    --   }
 
-      local result, err = client.resolve("myhost9", { qtype = client.TYPE_A })
-      -- check that the cache is properly populated
-      assert.equal(rec1, result)
-      assert.is_nil(err)
-      assert.equal(rec1, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
+    --   local result, err = client.resolve("myhost9", { qtype = client.TYPE_A })
+    --   -- check that the cache is properly populated
+    --   assert.equal(rec1, result)
+    --   assert.is_nil(err)
+    --   assert.equal(rec1, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
 
-      sleep(0.15) -- make sure we surpass the ttl of 0.1 of the record, so it is now stale.
-      -- clear mock records, such that we return name errors instead of records
-      local rec2 = {
-        errcode = 3,
-        errstr = "name error",
-      }
-      mock_records = {
-        ["myhost9.domain.com:"..client.TYPE_A] = rec2,
-        ["myhost9:"..client.TYPE_A] = rec2,
-      }
-      -- doing a resolve will trigger the background query now
-      result = client.resolve("myhost9", { qtype = client.TYPE_A })
-      assert.is_true(result.expired)  -- we get the stale record, now marked as expired
-      -- wait again for the background query to complete
-      sleep(0.1)
-      -- background resolve is now complete, check the cache, it should now have been
-      -- replaced by the name error
-      assert.equal(rec2, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
-    end)
+    --   sleep(0.15) -- make sure we surpass the ttl of 0.1 of the record, so it is now stale.
+    --   -- clear mock records, such that we return name errors instead of records
+    --   local rec2 = {
+    --     errcode = 3,
+    --     errstr = "name error",
+    --   }
+    --   mock_records = {
+    --     ["myhost9.domain.com:"..client.TYPE_A] = rec2,
+    --     ["myhost9:"..client.TYPE_A] = rec2,
+    --   }
+    --   -- doing a resolve will trigger the background query now
+    --   result = client.resolve("myhost9", { qtype = client.TYPE_A })
+    --   assert.is_true(result.expired)  -- we get the stale record, now marked as expired
+    --   -- wait again for the background query to complete
+    --   sleep(0.1)
+    --   -- background resolve is now complete, check the cache, it should now have been
+    --   -- replaced by the name error
+    --   assert.equal(rec2, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
+    -- end)
 
-    it("empty records do not replace stale records", function()
-      local rec1 = {{
-        type = client.TYPE_A,
-        address = "1.2.3.4",
-        class = 1,
-        name = "myhost9.domain.com",
-        ttl = 0.1,
-      }}
-      mock_records = {
-        ["myhost9.domain.com:"..client.TYPE_A] = rec1,
-      }
+    -- it("empty records do not replace stale records", function()
+    --   local rec1 = {{
+    --     type = client.TYPE_A,
+    --     address = "1.2.3.4",
+    --     class = 1,
+    --     name = "myhost9.domain.com",
+    --     ttl = 0.1,
+    --   }}
+    --   mock_records = {
+    --     ["myhost9.domain.com:"..client.TYPE_A] = rec1,
+    --   }
 
-      local result, err = client.resolve("myhost9", { qtype = client.TYPE_A })
-      -- check that the cache is properly populated
-      assert.equal(rec1, result)
-      assert.is_nil(err)
-      assert.equal(rec1, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
+    --   local result, err = client.resolve("myhost9", { qtype = client.TYPE_A })
+    --   -- check that the cache is properly populated
+    --   assert.equal(rec1, result)
+    --   assert.is_nil(err)
+    --   assert.equal(rec1, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
 
-      sleep(0.15) -- make sure we surpass the ttl of 0.1 of the record, so it is now stale.
-      -- clear mock records, such that we return name errors instead of records
-      local rec2 = {}
-      mock_records = {
-        ["myhost9.domain.com:"..client.TYPE_A] = rec2,
-        ["myhost9:"..client.TYPE_A] = rec2,
-      }
-      -- doing a resolve will trigger the background query now
-      result = client.resolve("myhost9", { qtype = client.TYPE_A })
-      assert.is_true(result.expired)  -- we get the stale record, now marked as expired
-      -- wait again for the background query to complete
-      sleep(0.1)
-      -- background resolve is now complete, check the cache, it should still have the
-      -- stale record, and it should not have been replaced by the empty record
-      assert.equal(rec1, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
-    end)
+    --   sleep(0.15) -- make sure we surpass the ttl of 0.1 of the record, so it is now stale.
+    --   -- clear mock records, such that we return name errors instead of records
+    --   local rec2 = {}
+    --   mock_records = {
+    --     ["myhost9.domain.com:"..client.TYPE_A] = rec2,
+    --     ["myhost9:"..client.TYPE_A] = rec2,
+    --   }
+    --   -- doing a resolve will trigger the background query now
+    --   result = client.resolve("myhost9", { qtype = client.TYPE_A })
+    --   assert.is_true(result.expired)  -- we get the stale record, now marked as expired
+    --   -- wait again for the background query to complete
+    --   sleep(0.1)
+    --   -- background resolve is now complete, check the cache, it should still have the
+    --   -- stale record, and it should not have been replaced by the empty record
+    --   assert.equal(rec1, lrucache:get(client.TYPE_A..":myhost9.domain.com"))
+    -- end)
 
-    it("AS records do replace stale records", function()
-      -- when the additional section provides recordds, they should be stored
-      -- in the cache, as in some cases lookups of certain types (eg. CNAME) are
-      -- blocked, and then we rely on the A record to get them in the AS
-      -- (additional section), but then they must be stored obviously.
-      local CNAME1 = {
-        type = client.TYPE_CNAME,
-        cname = "myotherhost.domain.com",
-        class = 1,
-        name = "myhost9.domain.com",
-        ttl = 0.1,
-      }
-      local A2 = {
-        type = client.TYPE_A,
-        address = "1.2.3.4",
-        class = 1,
-        name = "myotherhost.domain.com",
-        ttl = 60,
-      }
-      mock_records = setmetatable({
-        ["myhost9.domain.com:"..client.TYPE_CNAME] = { deepcopy(CNAME1) },  -- copy to make it different
-        ["myhost9.domain.com:"..client.TYPE_A] = { CNAME1, A2 },  -- not there, just a reference and target
-        ["myotherhost.domain.com:"..client.TYPE_A] = { A2 },
-      }, {
-        -- do not do lookups, return empty on anything else
-        __index = function(self, key)
-          --print("looking for ",key)
-          return {}
-        end,
-      })
+    -- it("AS records do replace stale records", function()
+    --   -- when the additional section provides recordds, they should be stored
+    --   -- in the cache, as in some cases lookups of certain types (eg. CNAME) are
+    --   -- blocked, and then we rely on the A record to get them in the AS
+    --   -- (additional section), but then they must be stored obviously.
+    --   local CNAME1 = {
+    --     type = client.TYPE_CNAME,
+    --     cname = "myotherhost.domain.com",
+    --     class = 1,
+    --     name = "myhost9.domain.com",
+    --     ttl = 0.1,
+    --   }
+    --   local A2 = {
+    --     type = client.TYPE_A,
+    --     address = "1.2.3.4",
+    --     class = 1,
+    --     name = "myotherhost.domain.com",
+    --     ttl = 60,
+    --   }
+    --   mock_records = setmetatable({
+    --     ["myhost9.domain.com:"..client.TYPE_CNAME] = { deepcopy(CNAME1) },  -- copy to make it different
+    --     ["myhost9.domain.com:"..client.TYPE_A] = { CNAME1, A2 },  -- not there, just a reference and target
+    --     ["myotherhost.domain.com:"..client.TYPE_A] = { A2 },
+    --   }, {
+    --     -- do not do lookups, return empty on anything else
+    --     __index = function(self, key)
+    --       --print("looking for ",key)
+    --       return {}
+    --     end,
+    --   })
 
-      assert(client.resolve("myhost9", { qtype = client.TYPE_CNAME }))
-      ngx.sleep(0.2)  -- wait for it to become stale
-      assert(client.toip("myhost9"))
+    --   assert(client.resolve("myhost9", { qtype = client.TYPE_CNAME }))
+    --   ngx.sleep(0.2)  -- wait for it to become stale
+    --   assert(client.toip("myhost9"))
 
-      local cached = lrucache:get(client.TYPE_CNAME..":myhost9.domain.com")
-      assert.are.equal(CNAME1, cached[1])
-    end)
+    --   local cached = lrucache:get(client.TYPE_CNAME..":myhost9.domain.com")
+    --   assert.are.equal(CNAME1, cached[1])
+    -- end)
 
   end)
 
