@@ -653,6 +653,17 @@ local function parseAnswer(qname, qtype, answers, try_list)
     end
   end
 
+  -- special handling for query A[1], and the desired result is to return CNAME[5] + A[1]. directly modify the A record name so that it is not filtered and returned directly.
+  if qtype == 1 and #answers > 0 and answers[1].type == 5 then
+    for i = #answers, 1, -1 do
+      if answers[i].type ~= 1 then
+        table_remove(answers, i)
+      else
+        answers[i].name = check_qname
+      end
+    end
+  end
+
   for i = #answers, 1, -1 do -- we're deleting entries, so reverse the traversal
     local answer = answers[i]
 
